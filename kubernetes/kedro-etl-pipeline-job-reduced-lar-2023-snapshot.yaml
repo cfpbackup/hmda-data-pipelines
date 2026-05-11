@@ -1,70 +1,104 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: kedro-etl-pipeline-job-reduced-lar-2023-snapshot
+  name: kedro-etl-pipeline-job-reduced-lar-2024-snapshot
   labels:
-    job: kedro-etl-pipeline-job-reduced-lar-2023-snapshot
+    job: kedro-etl-pipeline-job-reduced-lar-2024-snapshot
 spec:
   template:
     spec:
+      serviceAccountName: hmda-platform
       securityContext:
         fsGroup: 999
       containers:
         - name: kedro
-          image: hmda-ecr/hmda/kedro-etl-pipeline:latest_image
+          image: ADD ARN
           env:
-            - name: AWS_ACCESS_KEY_ID
-              valueFrom:
-                secretKeyRef:
-                  name: kedro-aws-credentials
-                  key: aws-access-key-id
-            - name: AWS_SECRET_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: kedro-aws-credentials
-                  key: aws-secret-access-key
             - name: AWS_DEFAULT_REGION
               value: "us-east-1"
             - name: CURRENT_YEAR
-              value: "2023_Filing_Season"
+              value: "2024_Filing_Season"
             - name: PARAMS
               value: "max_workers=6"
             - name: TO_OUTPUTS
-              value: "reduced_lar_reports_parquet_2023"
-            - name: KEDRO_DEV
+              value: "reduced_lar_reports_parquet_2024"
+            - name: KEDRO_ENV
               value: dev
             - name: STD_ARGS
-              value: "--tags=\"$(CURRENT_YEAR)\" --env=$(KEDRO_DEV) --runner=ThreadRunner --params=$(PARAMS) --to-outputs=$(TO_OUTPUTS)"
+              value: "--tags=\"$(CURRENT_YEAR)\" --env=$(KEDRO_ENV) --runner=ThreadRunner --params=$(PARAMS) --to-outputs=$(TO_OUTPUTS)"
             - name: SQLALCHEMY_SILENCE_UBER_WARNING
               value: "1"
           volumeMounts:
             - name: kedro-base-credentials
-              readOnly: true
               mountPath: /tmp/kedro-base-credentials
-            - name: kedro-dev-credentials
               readOnly: true
-              mountPath: /tmp/kedro-dev-credentials
-            - name: kedro-dev-env-configmap
+            - name: kedro-env-credentials
+              mountPath: /tmp/kedro-env-credentials
               readOnly: true
-              mountPath: /tmp/kedro-dev-env-configmap
-            - name: kedro-dev-postgres-configmap
+            - name: kedro-s3-paths
+              mountPath: /tmp/kedro-s3-paths
               readOnly: true
-              mountPath: /tmp/kedro-dev-postgres-configmap
-          command: ["/bin/bash", "-c",
-                    "/tmp/setup-job.sh && cd /hmda-etl-pipeline/ && kedro run $(STD_ARGS)"]
+          command:
+            - /bin/bash
+            - "-c"
+            - |
+                date;
+                mkdir -p /hmda-etl-pipeline/conf/${KEDRO_ENV}/catalogs;
+                cp /tmp/dev_postgres.yaml /hmda-etl-pipeline/conf/${KEDRO_ENV}/catalogs/;
+                chmod -R 755 /hmda-etl-pipeline/conf/${KEDRO_ENV};
+
+                echo "Building base credentials..."
+                cat <<EOF > /hmda-etl-pipeline/conf/base/credentials.yaml
+                production_pg_readonly:
+                  con: "$(cat /tmp/kedro-base-credentials/production_pg_readonly)"
+
+                hmda-kedro-test-bucket:
+                client_kwargs:
+                  region_name: "$(cat /tmp/kedro-base-credentials/hmda_kedro_test_bucket)"
+                EOF
+
+                echo "Building env credentials..."
+                cat << EOF > /hmda-etl-pipeline/conf/${KEDRO_ENV}/credentials.yaml
+                ${KEDRO_ENV}_pg_readonly: 
+                  con: "$(cat /tmp/kedro-env-credentials/${KEDRO_ENV}_pg_readonly)"
+                EOF
+
+                echo "Building globals..."
+                cat << EOF > /hmda-etl-pipeline/conf/${KEDRO_ENV}/globals.yml
+                regulator_path_prefix: "$(cat /tmp/kedro-s3-paths/regulator_path_prefix)"
+                archive_public_path_prefix: "$(cat /tmp/kedro-s3-paths/archive_public_path_prefix)"
+                public_path_prefix: "$(cat /tmp/kedro-s3-paths/public_path_prefix)"
+                reports_path_prefix: "$(cat /tmp/kedro-s3-paths/reports_path_prefix)"
+                credentials: "$(cat /tmp/kedro-s3-paths/credentials)"
+                EOF
+
+                cat /hmda-etl-pipeline/conf/${KEDRO_ENV}/catalogs/dev_postgres.yaml;
+                mkdir -p /hmda-etl-pipeline/logs && touch /hmda-etl-pipeline/logs/info.log;
+          
+                cd  /hmda-etl-pipeline/;  
+                kedro run --runner=ThreadRunner --params=max_workers=6 --tags=2024_Filing_Season --env=dev  --to-outputs=reduced_lar_reports_parquet_2024;
+                kedro run --runner=ThreadRunner --params=max_workers=6 --tags=2024_Filing_Season --env=dev  --to-outputs=state_county_mapping_2024; 
+                kedro run --runner=ThreadRunner --params=max_workers=6 --tags=2024_Filing_Season --env=dev  --to-outputs=institutions_flat_file_2024;
+                true; sleep 3600 
       volumes:
         - name: kedro-base-credentials
-          secret:
-            secretName: kedro-base-credentials
-        - name: kedro-dev-credentials
-          secret:
-            secretName: kedro-dev-credentials
-        - name: kedro-dev-env-configmap
-          configMap:
-            name: kedro-dev-env-configmap
-        - name: kedro-dev-postgres-configmap
-          configMap:
-            name: kedro-dev-postgres-configmap
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: kedro-base-creds-spc
+        - name: kedro-env-credentials
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: kedro-env-creds-spc
+        - name: kedro-s3-paths
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: kedro-s3-paths-spc
       tolerations:
         - key: node-group
           operator: Equal

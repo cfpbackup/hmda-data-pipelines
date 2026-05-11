@@ -39,26 +39,35 @@ spec:
               value: "1"
           volumeMounts:
             - name: kedro-base-credentials
-              readOnly: true
               mountPath: /tmp/kedro-base-credentials
-            - name: kedro-dev-credentials
               readOnly: true
-              mountPath: /tmp/kedro-dev-credentials
-            - name: kedro-dev-env-configmap
+            - name: kedro-env-credentials
+              mountPath: /tmp/kedro-env-credentials
               readOnly: true
-              mountPath: /tmp/kedro-dev-env-configmap
+            - name: kedro-s3-paths
+              mountPath: /tmp/kedro-s3-paths
+              readOnly: true
           command: ["/bin/bash", "-c",
                     "/tmp/setup-job.sh && cd /hmda-etl-pipeline/ && kedro run $(STD_ARGS) --pipeline=aggregate_and_disclosure_reports"]
       volumes:
         - name: kedro-base-credentials
-          secret:
-            secretName: kedro-base-credentials
-        - name: kedro-dev-credentials
-          secret:
-            secretName: kedro-dev-credentials
-        - name: kedro-dev-env-configmap
-          configMap:
-            name: kedro-dev-env-configmap
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: kedro-base-creds-spc
+        - name: kedro-env-credentials
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: kedro-env-creds-spc
+        - name: kedro-s3-paths
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: kedro-s3-paths-spc
       tolerations:
         - key: node-group
           operator: Equal

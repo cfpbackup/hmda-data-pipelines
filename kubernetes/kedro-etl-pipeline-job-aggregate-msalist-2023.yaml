@@ -1,37 +1,30 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: kedro-etl-pipeline-job-aggregate-msalist-2023
+  name: kedro-etl-pipeline-job-aggregate-msalist-2024
+  namespace: cron-jobs
   labels:
-    job: kedro-etl-pipeline-job-aggregate-msalist-2023
+    job: kedro-etl-pipeline-job-aggregate-msalist-2024
 spec:
   template:
     spec:
+      serviceAccountName: hmda-platform
       securityContext:
         fsGroup: 999
       containers:
         - name: kedro
-          image: hmda-ecr/hmda/kedro-etl-pipeline:latest_image
+          image: ADD ARN
+          imagePullPolicy: Always
           env:
-            - name: AWS_ACCESS_KEY_ID
-              valueFrom:
-                secretKeyRef:
-                  name: kedro-aws-credentials
-                  key: aws-access-key-id
-            - name: AWS_SECRET_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: kedro-aws-credentials
-                  key: aws-secret-access-key
             - name: AWS_DEFAULT_REGION
               value: "us-east-1"
             - name: CURRENT_YEAR
-              value: "2023_Filing_Season"
+              value: "2024_Filing_Season"
             - name: PARAMS
               value: "max_workers=6,use_lei_list=False,use_msa_list=True"
             - name: TO_OUTPUTS
-              value: "aggregate_reports_2023"
-            - name: KEDRO_DEV
+              value: "aggregate_reports_2024"
+            - name: KEDRO_ENV
               value: dev
             - name: STD_ARGS
               value: "--tags=\"$(CURRENT_YEAR)\" --env=$(KEDRO_DEV) --runner=ThreadRunner --params=$(PARAMS) --to-outputs=$(TO_OUTPUTS)"
@@ -39,26 +32,80 @@ spec:
               value: "1"
           volumeMounts:
             - name: kedro-base-credentials
-              readOnly: true
               mountPath: /tmp/kedro-base-credentials
-            - name: kedro-dev-credentials
               readOnly: true
-              mountPath: /tmp/kedro-dev-credentials
-            - name: kedro-dev-env-configmap
+            - name: kedro-env-credentials
+              mountPath: /tmp/kedro-env-credentials
               readOnly: true
-              mountPath: /tmp/kedro-dev-env-configmap
-          command: ["/bin/bash", "-c",
-                    "/tmp/setup-job.sh && cd /hmda-etl-pipeline/ && kedro run $(STD_ARGS) --pipeline=aggregate_and_disclosure_reports"]
+            - name: kedro-s3-paths
+              mountPath: /tmp/kedro-s3-paths
+              readOnly: true
+          command:
+            - /bin/bash
+            - "-c"
+            - |
+                date;
+                mkdir -p /hmda-etl-pipeline/conf/${KEDRO_ENV}/catalogs;
+                cp /tmp/dev_postgres.yaml /hmda-etl-pipeline/conf/${KEDRO_ENV}/catalogs/;
+                chmod -R 755 /hmda-etl-pipeline/conf/${KEDRO_ENV};
+
+                echo "Building base credentials..."
+                cat <<EOF > /hmda-etl-pipeline/conf/base/credentials.yaml
+                production_pg_readonly:
+                  con: "$(cat /tmp/kedro-base-credentials/production_pg_readonly)"
+
+                hmda-kedro-test-bucket:
+                client_kwargs:
+                  region_name: "$(cat /tmp/kedro-base-credentials/hmda_kedro_test_bucket)"
+                EOF
+
+                echo "Building env credentials..."
+                cat << EOF > /hmda-etl-pipeline/conf/${KEDRO_ENV}/credentials.yaml
+                ${KEDRO_ENV}_pg_readonly: 
+                  con: "$(cat /tmp/kedro-env-credentials/${KEDRO_ENV}_pg_readonly)"
+                EOF
+
+                echo "Building globals..."
+                cat << EOF > /hmda-etl-pipeline/conf/${KEDRO_ENV}/globals.yml
+                regulator_path_prefix: "$(cat /tmp/kedro-s3-paths/regulator_path_prefix)"
+                archive_public_path_prefix: "$(cat /tmp/kedro-s3-paths/archive_public_path_prefix)"
+                public_path_prefix: "$(cat /tmp/kedro-s3-paths/public_path_prefix)"
+                reports_path_prefix: "$(cat /tmp/kedro-s3-paths/reports_path_prefix)"
+                credentials: "$(cat /tmp/kedro-s3-paths/credentials)"
+                EOF
+
+                cat /hmda-etl-pipeline/conf/${KEDRO_ENV}/catalogs/dev_postgres.yaml;
+                mkdir -p /hmda-etl-pipeline/logs && touch /hmda-etl-pipeline/logs/info.log;
+
+                cd /hmda-etl-pipeline/
+                kedro run --async --runner=ThreadRunner --params="aggregate_reports_path_for_year_2024=data/reports/aggregate/2024/aggregate_reports,disclosure_reports_path_for_year_2024=data/reports/2024/disclosure_reports,report_2024=2024,max_workers=1,use_lei_list=True,skip_existing_reports=False" --tags="2024_Filing_Season" --env=dev --to-outputs="disclosure_reports_2024";
+                true; sleep 3600 
+          resources:
+            requests:
+              memory: "32Gi"
+              cpu: "1"
+            limits:
+              memory: "120Gi"
+              cpu: "12"
       volumes:
         - name: kedro-base-credentials
-          secret:
-            secretName: kedro-base-credentials
-        - name: kedro-dev-credentials
-          secret:
-            secretName: kedro-dev-credentials
-        - name: kedro-dev-env-configmap
-          configMap:
-            name: kedro-dev-env-configmap
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: kedro-base-creds-spc
+        - name: kedro-env-credentials
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: kedro-env-creds-spc
+        - name: kedro-s3-paths
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: kedro-s3-paths-spc
       tolerations:
         - key: node-group
           operator: Equal
