@@ -3,7 +3,7 @@ Generates data publisher dataset files. These include the LAR, LAR loan limit,
 MLAR, Panel, and TS files (including public, regulator, yearly, and quarterly
 versions).
 
-Also generate a reduced LAR file to be used for aggregate and disclosure reports. 
+Also generate a reduced LAR file to be used for aggregate and disclosure reports.
 """
 
 import functools as ft
@@ -30,7 +30,7 @@ def withkwargs(func, **kwargs):
     return wrapper
 
 
-for year in (2019, 2020, 2021, 2022, 2023, 2024):
+for year in (2019, 2020, 2021, 2022, 2023, 2024, 2025):
     nodes += [
         # Create regulator LAR flat file
         node(

@@ -50,16 +50,19 @@ aws eks create-nodegroup \
 ```
 - Scale to zero
 ```
+aws eks list-nodegroups --cluster-name $cluster | grep -i kedro
+
 aws eks update-nodegroup-config \
---cluster-name xxx \
---nodegroup-name xxx \
+--cluster-name $cluster \
+--nodegroup-name $ng \
 --scaling-config minSize=0,maxSize=1,desiredSize=0
 ```
+
 - Scale to one
 ```
 aws eks update-nodegroup-config \
---cluster-name xxx \
---nodegroup-name xxx \
+--cluster-name $cluster \
+--nodegroup-name $ng \
 --scaling-config minSize=1,maxSize=1,desiredSize=1
 ```
 - Status
@@ -329,7 +332,7 @@ kedro run --runner=ThreadRunner --params=max_workers=6 --tags="2023_Filing_Seaso
 ```
 - Apply kedro job for state county mapping:
 ```
-kubectl apply -f kedro-etl-pipeline-job-state-county-mapping-2023.yaml
+kubectl apply -f kubernetes/2025/kedro-etl-pipeline-job-state-county-mapping-2025.yaml
 ```
 - Confirm that S3 contains the state county mapping csv file for that year. The exact S3 filepath can be found in the job's logs, along with the number of rows in the dataset.
 ```

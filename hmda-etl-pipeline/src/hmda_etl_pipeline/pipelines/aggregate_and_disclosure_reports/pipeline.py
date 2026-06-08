@@ -1,5 +1,5 @@
 """
-Generate aggregate and disclosure reports. 
+Generate aggregate and disclosure reports.
 """
 
 from kedro.pipeline import Pipeline, node, pipeline
@@ -9,7 +9,7 @@ from .nodes import create_aggregate_reports, create_disclosure_reports
 # this will be supplied to create_pipeline below
 nodes = []
 
-for year in (2024,):
+for year in (2025,):
     nodes += [
         node(
             create_aggregate_reports,
