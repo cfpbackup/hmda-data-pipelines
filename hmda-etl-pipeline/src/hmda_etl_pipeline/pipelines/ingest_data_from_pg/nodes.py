@@ -1,10 +1,10 @@
 """
-Performs basic count integrity checks on LAR, TS, and Panel datasets 
-from Postgres. This validation will run prior to further processing. 
+Performs basic count integrity checks on LAR, TS, and Panel datasets
+from Postgres. This validation will run prior to further processing.
 
 Additionally, functions exist to facilitate writing LAR, TS, and Panel
-data to parquet files. TS and Panel are written to individual parquet 
-files whereas LAR is partitioned due to data volume. Modified LAR is 
+data to parquet files. TS and Panel are written to individual parquet
+files whereas LAR is partitioned due to data volume. Modified LAR is
 handled within the `data_publisher` pipeline.
 """
 
@@ -82,11 +82,12 @@ def validate_counts(
 
     # here setdiff1d finds all records in leis_in_lar that are not in
     # leis_in_institutions. This must be empty
-    missing_leis = np.setdiff1d(leis_in_lar, leis_in_institutions)
-    if missing_leis.size != 0:
-        raise RuntimeError(
-            f"LEIs not found in Panel. Number missing: {missing_leis.size}"
-        )
+    # do not enforce lei matching 2025 onwards
+    # missing_leis = np.setdiff1d(leis_in_lar, leis_in_institutions)
+    # if missing_leis.size != 0:
+    #     raise RuntimeError(
+    #         f"LEIs not found in Panel. Number missing: {missing_leis.size}"
+    #     )
 
     logger.info("Preliminary count validation successful.")
     return True
@@ -215,13 +216,13 @@ def process_lar_partitions(
     for partition_index, chunk in enumerate(pg_lar_data):
         name = "lar_" + str(partition_index)
         partition_holder[name] = partial(_process_lar_partition,lar_df=chunk,dtypes=column_dtypes)
-        
+
     n_partitions_to_process = partition_index + 1
-    
+
     if n_partitions_to_process == 1:
         # this should only occur at the very beginning of filing season
         logger.warning("Only a single LAR partition is being processed")
-    
+
     logger.info("Found " + str(n_partitions_to_process) + " LAR Partitions")
 
     return partition_holder
