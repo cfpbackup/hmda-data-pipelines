@@ -248,6 +248,7 @@ Note: kedro versions in [`pyproject.toml`](hmda-etl-pipeline/pyproject.toml)and 
 ```
 ```
 docker buildx build --platform linux/amd64,linux/arm64 -t ECR-ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/cfpb/regtech/hmda/hmda-kedro-etl-pipeline:06082026-v1 .
+docker push ECR-ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/cfpb/regtech/hmda/hmda-kedro-etl-pipeline:06082026-v1
 ```
 #### Docker run
 Note: cfpb-export-bucket service account does NOT work

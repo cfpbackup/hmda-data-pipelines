@@ -290,9 +290,19 @@ aws s3 ls  --human-readable s3://xxx/dev/kedro-etl-pipeline/archive-public/2023/
 2024-09-26 20:59:49  200.5 KiB 2023_ts_2024-09-26.zip
 ```
 
-### Aggregate and Disclosure Reports 
+## Aggregate and Disclosure Reports 
 - See [aggregate and disclosure pipeline file](https://github.cfpb.gov/HMDA-Operations/kedro-etl-pipeline/blob/main/hmda-etl-pipeline/src/hmda_etl_pipeline/pipelines/aggregate_and_disclosure_reports/pipeline.py) for list of inputs and outputs.
 
+### Pre-requsister jobs
+```
+kubectl apply -f kubernetes/2025/kedro-etl-pipeline-job-state-county-mapping-2025.yaml  
+On sucesss job creates s3://$BUCKET/stg/kedro-etl-pipeline/reports/2025/state_county_mapping.csv file
+
+kubectl apply -f kubernetes/2025/kedro-etl-pipeline-job-reduced-lar-reports-parquet-2025.yaml
+On sucesss, job creates s3://hmda-kedro-test-bucket/stg/kedro-etl-pipeline/reports/2024/reduced_lar.parquet
+
+kubectl apply -f kubernetes/2025/kedro-etl-pipeline-job-institutions-flat-file-2025.yaml 
+```
 #### Steps to prepare input data before running aggregate or disclosure reports
 ##### Step 1 a) Upload the lei_list.csv file (Do once per year)
 - The csv file should contain only one LEI per line.
