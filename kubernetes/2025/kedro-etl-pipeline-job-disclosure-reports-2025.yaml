@@ -1,13 +1,14 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: kedro-etl-pipeline-job-reduced-lar-reports-parquet-2025
+  name: kedro-etl-pipeline-job-disclosure-reports-2025
   namespace: cron-jobs
   labels:
-    job: kedro-etl-pipeline-job-reduced-lar-reports-parquet-2025
+    job: kedro-etl-pipeline-job-disclosure-reports-2025
 spec:
   template:
     spec:
+      serviceAccountName: hmda-platform
       securityContext:
         fsGroup: 999
       containers:
@@ -25,10 +26,11 @@ spec:
               value: "1"
           volumeMounts:
             - name: kedro-base-credentials
-              readOnly: true
               mountPath: /tmp/kedro-base-credentials
+              readOnly: true
             - name: kedro-env-credentials
               mountPath: /tmp/kedro-env-credentials
+              readOnly: true
             - name: kedro-s3-paths
               mountPath: /tmp/kedro-s3-paths
               readOnly: true
@@ -70,7 +72,7 @@ spec:
                 mkdir -p /hmda-etl-pipeline/logs && touch /hmda-etl-pipeline/logs/info.log;
 
                 cd /hmda-etl-pipeline/
-                kedro run --runner=ThreadRunner --params="max_workers=2" --tags="2025_Filing_Season" --env=dev --to-outputs="reduced_lar_reports_parquet_2025";
+                kedro run --runner=ThreadRunner --pipeline="aggregate_and_disclosure_reports" --params="disclosure_reports_path_for_year_2025=data/reports/2025/disclosure_reports,report_2025=2025,max_workers=2,skip_existing_reports=False" --tags="2025_Filing_Season" --env=dev --to-outputs="disclosure_reports_2025";
 
                 true; sleep 5
           resources:
@@ -99,9 +101,6 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: kedro-s3-paths-spc
-        - name: kedro-dev-postgres-2025-yaml-configmap
-          configMap:
-            name: kedro-dev-postgres-2025-yaml-configmap
       tolerations:
         - key: node-group
           operator: Equal
@@ -117,4 +116,3 @@ spec:
                 values:
                 - kedro-large
       restartPolicy: OnFailure
-      serviceAccountName: hmda-platform

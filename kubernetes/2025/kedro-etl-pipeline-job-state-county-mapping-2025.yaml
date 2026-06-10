@@ -102,9 +102,5 @@ spec:
         - name: kedro-dev-postgres-2025-yaml-configmap
           configMap:
             name: kedro-dev-postgres-2025-yaml-configmap
-      tolerations:
-        - key: node-group
-          operator: Equal
-          value: kedro-regular
       restartPolicy: OnFailure
       serviceAccountName: hmda-platform

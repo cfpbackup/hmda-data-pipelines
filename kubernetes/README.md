@@ -228,12 +228,11 @@ aws s3 ls  --human-readable s3://xxx/dev/kedro-etl-pipeline/archive-public/2023/
 ```
 
 ## Aggregate and Disclosure Reports (Updated for year 2025)
-- See [aggregate and disclosure pipeline file](https://github.cfpb.gov/HMDA-Operations/kedro-etl-pipeline/blob/main/hmda-etl-pipeline/src/hmda_etl_pipeline/pipelines/aggregate_and_disclosure_reports/pipeline.py) for list of inputs and outputs.
-- Add YEAR in file `hmda-etl-pipeline/src/hmda_etl_pipeline/pipelines/aggregate_and_disclosure_reports/pipeline.py` - Line 12
-- Add YEAR in file `hmda-etl-pipeline/src/hmda_etl_pipeline/pipelines/data_publisher/pipeline.py` - Line 33
-- Add YEAR in file `hmda-etl-pipeline/src/hmda_etl_pipeline/pipelines/ingest_data_from_pg/pipeline.py` - Line 26
-- Update [dev_postgres.yaml](https://github.cfpb.gov/HMDA-Operations/kedro-etl-pipeline/blob/main/hmda-etl-pipeline/conf/dev/catalogs/dev_postgres.yaml) with `snapshot` tables
-- `hmda-etl-pipeline/conf/base/catalogs/production_postgres.yaml` not used
+- Add year to the all the pipline files to [aggregate_and_disclosure_reports-pipeline](src/hmda_etl_pipeline/pipelines/aggregate_and_disclosure_reports/pipeline.py#12), [data_publisher-piple](src/hmda_etl_pipeline/pipelines/data_publisher/pipeline.py#L33) and [ingest_data_from_pg-pipeline](src/hmda_etl_pipeline/pipelines/ingest_data_from_pg/pipeline.py#L26)
+- Update [dev_postgres.yaml](conf/dev/catalogs/dev_postgres.yaml) with `snapshot` tables
+- Note: [production_postgres.yaml](hmda-etl-pipeline/conf/base/catalogs/production_postgres.yaml) not used
+- See [aggregate and disclosure pipeline file](src/hmda_etl_pipeline/pipelines/aggregate_and_disclosure_reports/pipeline.py) for list of inputs and outputs. 
+- Wiki page most update info for [local report generation](https://github.com/cfpb/hmda-data-pipelines/wiki/A&D-Report-Local-Generation)
 
 #### Secerts/Configmaps in secretmanager
 ```
@@ -302,7 +301,7 @@ cat msa_list.csv
 s3://$BUCKET/stg/kedro-etl-pipeline/reports/aggregate/2025/msa_list.csv
 ```
 
-##### Step 5) Generate aggregate reports (Do once per year) - 40 min
+##### Step 5) Generate aggregate reports (Do once per year) - run duration 40 min
 - Include `skip_existing_reports=False` in the params list to regenerate all reports, including ones that already exist in S3.
 - Include `use_lei_list=True` in the params list to exclude the list of LEI found in lei_list.csv from the reports.
 - Include `use_msa_list=True` in the params list to generate aggregate reports on the list of MSA in msa_list.csv.
@@ -318,7 +317,7 @@ aws s3 ls s3://$BUCKET/stg/kedro-etl-pipeline/reports/aggregate/2025/aggregate_r
 ```
 
 
-#### Step 5) Generate disclosure reports
+#### Step 5) Generate disclosure reports (run durataion 14 hours)
 - Include `skip_existing_reports=False` in the params list to regenerate all reports, including ones that already exist in S3.
 - Include `use_lei_list=True` in the params list to generate disclosure reports on the list of LEI in lei_list.csv.
 - Run on `kedro-large` node
@@ -329,20 +328,18 @@ kubectl apply -f kubernetes/2025/kedro-etl-pipeline-job-disclosure-reports-2025.
 - S3 outputs LEI folder count processed
 ```
 aws s3 ls s3://hmda-kedro-test-bucket/stg/kedro-etl-pipeline/reports/disclosure/2025/disclosure_reports/ --recursive | wc -l
-   99926
+  341882
 ```
 
 - Logs
 ```
-kubectl logs -f  $(kubectl get pods | grep kedro-etl-pipeline-job-disclosure-2023 | awk '{print $1}') 
-[03/27/24 16:17:58] INFO     Creating disclosure report table 2 for nodes.py:210
-                             ZXMJHJK466PBZTM5F379/99999                         
-[03/27/24 16:18:03] INFO     Completed node:                thread_runner.py:138
-                             generate_disclosure_reports_fo                     
-                             r_2023                                             
-                    INFO     Completed 1 out of 1 tasks     thread_runner.py:139
-                    INFO     Pipeline execution completed          runner.py:105
-                             successfully.
+kubectl -n cron-jobs logs -f  $(kubectl -n cron-jobs get pods | grep kedro-etl-pipeline-job-disclosure-reports-2025 | awk '{print $1}')
+                             ZXMJHJK466PBZTM5F379/99999                                           
+[06/10/26 12:39:54] INFO     Completed node:                thread_runner.py:141
+                             generate_disclosure_reports_for_2025                                             
+                    INFO     Completed 1 out of 1 tasks     thread_runner.py:142
+                    INFO     Pipeline execution completed          runner.py:125
+                             successfully. 
 ```
 > **_Note:_** Reports job can be re-run and if folders for specific LEI exists in S3 buckets, they will be skipped. If you find errors, re-run all the reports with the param `skip_existing_reports=False`, or re-run some reports by updating lei_list.csv and using the param `use_lei_list=True`.
 ```
