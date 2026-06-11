@@ -1,0 +1,111 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kedro-etl-pipeline-job-aggregate-2025
+  namespace: cron-jobs
+  labels:
+    job: kedro-etl-pipeline-job-aggregate-2025
+spec:
+  template:
+    spec:
+      serviceAccountName: hmda-platform
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: kedro
+          image: ECR-ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/cfpb/regtech/hmda/hmda-kedro-etl-pipeline:06082026-v1
+          imagePullPolicy: Always
+          env:
+            - name: AWS_DEFAULT_REGION
+              value: "us-east-1"
+            - name: KEDRO_ENV
+              value: dev
+            - name: SQLALCHEMY_SILENCE_UBER_WARNING
+              value: "1"
+            - name: DO_NOT_TRACK
+              value: "1"
+          volumeMounts:
+            - name: kedro-base-credentials
+              mountPath: /tmp/kedro-base-credentials
+              readOnly: true
+            - name: kedro-env-credentials
+              mountPath: /tmp/kedro-env-credentials
+              readOnly: true
+            - name: kedro-s3-paths
+              mountPath: /tmp/kedro-s3-paths
+              readOnly: true
+          command:
+            - /bin/bash
+            - "-c"
+            - |
+                date;
+                mkdir -p /hmda-etl-pipeline/conf/${KEDRO_ENV}/catalogs;
+                cp /tmp/dev_postgres.yaml /hmda-etl-pipeline/conf/${KEDRO_ENV}/catalogs/;
+                chmod -R 755 /hmda-etl-pipeline/conf/${KEDRO_ENV};
+
+                echo "Building base credentials..."
+                cat <<EOF > /hmda-etl-pipeline/conf/base/credentials.yaml
+                production_pg_readonly:
+                  con: "$(cat /tmp/kedro-base-credentials/production_pg_readonly)"
+
+                hmda-kedro-test-bucket:
+                client_kwargs:
+                  region_name: "$(cat /tmp/kedro-base-credentials/hmda_kedro_test_bucket)"
+                EOF
+
+                echo "Building env credentials..."
+                cat << EOF > /hmda-etl-pipeline/conf/${KEDRO_ENV}/credentials.yaml
+                ${KEDRO_ENV}_pg_readonly:
+                  con: "$(cat /tmp/kedro-env-credentials/${KEDRO_ENV}_pg_readonly)"
+                EOF
+
+                echo "Building globals..."
+                cat << EOF > /hmda-etl-pipeline/conf/${KEDRO_ENV}/globals.yml
+                regulator_path_prefix: "$(cat /tmp/kedro-s3-paths/regulator_path_prefix)"
+                archive_public_path_prefix: "$(cat /tmp/kedro-s3-paths/archive_public_path_prefix)"
+                public_path_prefix: "$(cat /tmp/kedro-s3-paths/public_path_prefix)"
+                reports_path_prefix: "$(cat /tmp/kedro-s3-paths/reports_path_prefix)"
+                credentials: "$(cat /tmp/kedro-s3-paths/credentials)"
+                EOF
+
+                cat /hmda-etl-pipeline/conf/${KEDRO_ENV}/catalogs/dev_postgres.yaml;
+                mkdir -p /hmda-etl-pipeline/logs && touch /hmda-etl-pipeline/logs/info.log;
+
+                cd /hmda-etl-pipeline/
+                kedro run --runner=ThreadRunner --pipeline="aggregate_and_disclosure_reports" --params="aggregate_reports_path_for_year_2025=data/reports/aggregate/2025/aggregate_reports,report_2025=2025,max_workers=2,skip_existing_reports=False,use_msa_list=False" --tags="2025_Filing_Season" --env=dev --to-outputs="aggregate_reports_2025";
+
+                true; sleep 5
+      volumes:
+        - name: kedro-base-credentials
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: kedro-base-creds-spc
+        - name: kedro-env-credentials
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: kedro-env-creds-spc
+        - name: kedro-s3-paths
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: kedro-s3-paths-spc
+      tolerations:
+        - key: node-group
+          operator: Equal
+          value: kedro-large
+          effect: "NoSchedule"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-group
+                operator: In
+                values:
+                - kedro-large
+      restartPolicy: OnFailure

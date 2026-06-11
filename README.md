@@ -100,13 +100,13 @@ source kedro1/bin/activate
 |_|\_\___|\__,_|_|  \___/
 v0.18.12
 
-(kedro1) $ export CURRENT_YEAR="2023_Filing_Season"
-(kedro1) $ export KEDRO_DEV="dev"
-(kedro1) $ export AWS_ACCESS_KEY_ID=" "
-(kedro1) $ export AWS_SECRET_ACCESS_KEY=" "
-(kedro1) $ export AWS_DEFAULT_REGION="us-east-1"
+export CURRENT_YEAR="2023_Filing_Season"
+export KEDRO_DEV="dev"
+export AWS_ACCESS_KEY_ID=" "
+export AWS_SECRET_ACCESS_KEY=" "
+export AWS_DEFAULT_REGION="us-east-1"
 
-(kedro1) $ cd /hmda-etl-pipeline/ && kedro run --tags="$CURRENT_YEAR" --env=$KEDRO_DEV --to-outputs="public_ts_flat_file_2023"
+cd hmda-etl-pipeline && kedro run --tags="$CURRENT_YEAR" --env=$KEDRO_DEV --to-outputs="public_ts_flat_file_2023"
 
 (kedro1)  $ deactivate
 rm -rf kedro1
@@ -247,12 +247,13 @@ Note: kedro versions in [`pyproject.toml`](hmda-etl-pipeline/pyproject.toml)and 
 ## CMD cd /hmda-etl-pipeline/ && /bin/bash && kedro run --tags="$CURRENT_YEAR" --env=$KEDRO_DEV --to-outputs="public_ts_flat_file_2023"
 ```
 ```
-docker build -t local-kedro  .
+docker buildx build --platform linux/amd64,linux/arm64 -t ECR-ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/cfpb/regtech/hmda/hmda-kedro-etl-pipeline:06082026-v1 .
+docker push ECR-ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/cfpb/regtech/hmda/hmda-kedro-etl-pipeline:06082026-v1
 ```
 #### Docker run
 Note: cfpb-export-bucket service account does NOT work
 ```
-docker run -it -v /Users/joshib/workdir/kedro-baseline/dockerfile-creds-master:/tmp/kedro  local-kedro /bin/bash
+docker run -it -v $HOME/workdir/kedro-baseline/dockerfile-creds-master:/tmp/kedro  local-kedro /bin/bash
 
 kedro_docker@883bb32e517f:/$ cd /tmp/kedro
 cp hmda-etl-pipeline_conf_base_credentials.yaml /hmda-etl-pipeline/conf/base/credentials.yaml 

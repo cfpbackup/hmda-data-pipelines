@@ -47,6 +47,7 @@ spec:
             - name: kedro-dev-env-configmap
               readOnly: true
               mountPath: /tmp/kedro-dev-env-configmap
+
           command: ["/bin/bash", "-c",
                     "/tmp/setup-job.sh && cd /hmda-etl-pipeline/ && kedro run $(STD_ARGS) --pipeline=aggregate_and_disclosure_reports"]
       volumes:

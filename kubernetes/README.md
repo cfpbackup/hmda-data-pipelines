@@ -16,26 +16,11 @@ kubectl create secret generic kedro-dev-env-config --from-file=globals.yaml
 - Kedro requires a dedicated nodegrop with large instance for initial `data-publisher` and all disclosure reports runs
 - Each disclosure reports `run` takes approximately 9 hours
 - Delete the node on job completion to save cost
-- Currently we only have one large and one regular nodegroup configuration, corresponding job taints/toleration is not year specific, hence reports for different years cannot be run in parallel 
-
-<!-- memory node is used instead of 4x.large
-###### m4.4xlarge
-```
-aws eks create-nodegroup \
---cluster-name xxx \
---nodegroup-name xxx \
---scaling-config minSize=1,maxSize=1,desiredSize=1 \
---subnets xxx  \
---instance-types m5.4xlarge \
---remote-access xxx \
---node-role xxx \
---labels node-group=kedro \
---taints key=node-group,value=kedro,effect=NO_SCHEDULE
-```
--->
+- Currently we only have one large nodegroup configuration, corresponding job taints/toleration is not year specific, hence reports for different years cannot be run in parallel 
 
 ##### Memory [Node](https://aws.amazon.com/ec2/instance-types/r6a/) (r7g.4xlarge, vCPUs	16, Memory 128G)
-- Create Node
+- Command to create node
+- Note: Large node is create via `aws cdk`
 ```
 aws eks create-nodegroup \
 --cluster-name xxx \
@@ -50,16 +35,19 @@ aws eks create-nodegroup \
 ```
 - Scale to zero
 ```
+aws eks list-nodegroups --cluster-name $cluster | grep -i kedro
+
 aws eks update-nodegroup-config \
---cluster-name xxx \
---nodegroup-name xxx \
+--cluster-name $cluster \
+--nodegroup-name $ng \
 --scaling-config minSize=0,maxSize=1,desiredSize=0
 ```
+
 - Scale to one
 ```
 aws eks update-nodegroup-config \
---cluster-name xxx \
---nodegroup-name xxx \
+--cluster-name $cluster \
+--nodegroup-name $ng \
 --scaling-config minSize=1,maxSize=1,desiredSize=1
 ```
 - Status
@@ -67,66 +55,18 @@ aws eks update-nodegroup-config \
 kubectl get nodes -l "eks.amazonaws.com/nodegroup=xxx" -w
 ```
 > **_Note:_** Run pod after node is in Ready state
-
-##### Regular [Node](https://aws.amazon.com/ec2/instance-types/m5/) (m5.2xlarge, vCPU	8, Memory 32G) is used for a running a `list of LEIs`
-- Create Node
-```
-aws eks create-nodegroup \
---cluster-name xxx \
---nodegroup-name xxx \
---scaling-config minSize=0,maxSize=1,desiredSize=0 \
---subnets xxx  \
---instance-types m5.2xlarge \
---remote-access xxx \
---node-role xxx \
---labels node-group=kedro-regular \
---taints key=node-group,value=kedro-regular,effect=NO_SCHEDULE
-```
-- Scale to zero
-```
-aws eks update-nodegroup-config \
---cluster-name xxx \
---nodegroup-name xxx \
---scaling-config minSize=0,maxSize=1,desiredSize=0
-```
-- Scale to one
-```
-aws eks update-nodegroup-config \
---cluster-name xxx \
---nodegroup-name xxx  \
---scaling-config minSize=1,maxSize=1,desiredSize=1
-```
-- Status
-```
-kubectl get nodes -l "eks.amazonaws.com/nodegroup=xxx" -w
-```
-> **_Note:_** Run pod after node is in Ready state
-
 
 ### Docker Build for k8
 
-Our kedro report generation jobs are based on the [Amazon Elastic Container Registry (Amazon ECR)](https://docs.aws.amazon.com/ecr). Set your environment as shown.
-
-```
-$ export AWS_ECR=xxx
-```
-
-The [AWS CLI](https://aws.amazon.com/cli) is also required.
-
-- Run ```aws configure``` and authenticate with your AWS **sandbox** credentials. If this is unclear, contact your manager.
-- Log into AWS ECR as shown.
-```
-$ aws ecr get-login-password --profile default --region us-east-1 | docker login --username AWS --password-stdin $AWS_ECR
-```
+Our kedro report generation jobs are stored on the [Amazon Elastic Container Registry (Amazon ECR)](https://docs.aws.amazon.com/ecr).
 - Comment configuration and commands in Dockerfile used for local docker run. **_Note:_** `.dockerignore` removes the local credentials.
-- Choose an image tag **{myimagetag}**.
 - Build and push to AWS ECR as shown.
 ```
-$ docker build --platform linux/amd64 -t $AWS_ECR/hmda/kedro-etl-pipeline:{myimagetag} .
-$ docker push $AWS_ECR/hmda/kedro-etl-pipeline:{myimagetag}
+docker build --platform linux/amd64 -t ECR-ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/cfpb/regtech/hmda/hmda-kedro-etl-pipeline:06082026-v1 .
+docker push ECR-ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/cfpb/regtech/hmda/hmda-kedro-etl-pipeline:06082026-v1
 ```
 
-## Kubernetes Data Publisher Jobs 
+## Kubernetes Data Publisher Jobs
 - Before running:
     - For the docker image listed in `kedro-data-publisher/values.yaml`, make sure the `hmda-ecr` repository is set correctly and that the tag is correct
     - Check that `runCronJobs=true` is set in `kedro-data-publisher/values.yaml`
@@ -287,152 +227,121 @@ aws s3 ls  --human-readable s3://xxx/dev/kedro-etl-pipeline/archive-public/2023/
 2024-09-26 20:59:49  200.5 KiB 2023_ts_2024-09-26.zip
 ```
 
-### Aggregate and Disclosure Reports 
-- See [aggregate and disclosure pipeline file](https://github.cfpb.gov/HMDA-Operations/kedro-etl-pipeline/blob/main/hmda-etl-pipeline/src/hmda_etl_pipeline/pipelines/aggregate_and_disclosure_reports/pipeline.py) for list of inputs and outputs.
+## Aggregate and Disclosure Reports (Updated for year 2025)
+- Add year to the all the pipline files to [aggregate_and_disclosure_reports-pipeline](src/hmda_etl_pipeline/pipelines/aggregate_and_disclosure_reports/pipeline.py#12), [data_publisher-piple](src/hmda_etl_pipeline/pipelines/data_publisher/pipeline.py#L33) and [ingest_data_from_pg-pipeline](src/hmda_etl_pipeline/pipelines/ingest_data_from_pg/pipeline.py#L26)
+- Update [dev_postgres.yaml](conf/dev/catalogs/dev_postgres.yaml) with `snapshot` tables
+- Note: [production_postgres.yaml](hmda-etl-pipeline/conf/base/catalogs/production_postgres.yaml) not used
+- See [aggregate and disclosure pipeline file](src/hmda_etl_pipeline/pipelines/aggregate_and_disclosure_reports/pipeline.py) for list of inputs and outputs. 
+- Wiki page most update info for [local report generation](https://github.com/cfpb/hmda-data-pipelines/wiki/A&D-Report-Local-Generation)
 
-#### Steps to prepare input data before running aggregate or disclosure reports
-##### Step 1 a) Upload the lei_list.csv file (Do once per year)
-- The csv file should contain only one LEI per line.
-- Example file:
+#### Secerts/Configmaps in secretmanager
 ```
-cat lei_list.csv 
-549300M8WGW2D17CZD19
-OX3PU53ZLPQKJ4700D47
+kubectl apply -f kubernetes/kedro-base-creds-spc.yaml
+kubectl apply -f kubernetes/kedro-base-creds-spc.yaml
+kubectl apply -f kubernetes/kedro-s3-paths-spc.yaml
 ```
-- The file should be placed in s3://xxx/dev/kedro-etl-pipeline/reports/2023/disclosure/ for disclosure reports or in s3://cfpb-hmda-export/dev/kedro-etl-pipeline/reports/2023/aggregate/ for aggregate reports
-- Upload LEI list file to S3
-```
-aws s3 cp lei_list.csv s3://xxx/dev/kedro-etl-pipeline/reports/disclosure/2023
-```
-- For disclosure reports, this file is used to run reports on a list of LEI.
-- For aggregate reports, this file is used to exclude some LEI from the reports.
-
-##### Step 1 b) Upload the msa_list.csv file (Do once per year)
-- The csv file should contain only one MSA per line.
-- Example file:
-```
-cat msa_list.csv 
-16180
-99999
-```
-- This file is only used for aggregate reports to run reports on a list of MSA.
-- The file should be placed in s3://xxx/dev/kedro-etl-pipeline/reports/aggregate/2023/.
-- Upload MSA list file to S3
-```
-aws s3 cp msa_list.csv s3://xxx/dev/kedro-etl-pipeline/reports/aggregate/2023/
-```
-
-##### Step 2) Generate state county mapping csv file (Run once per year)
-- Example Kedro run command to be used in kedro-etl-pipeline-job-state-county-mapping-2023.yaml
-```
-kedro run --runner=ThreadRunner --params=max_workers=6 --tags="2023_Filing_Season" --env=dev  --to-outputs="state_county_mapping_2023"
-```
+### Pre-requsiste jobs
+##### Step 1) Generate state county mapping csv file (Run once per year)
 - Apply kedro job for state county mapping:
 ```
-kubectl apply -f kedro-etl-pipeline-job-state-county-mapping-2023.yaml
+kubectl apply -f kubernetes/2025/kedro-etl-pipeline-job-state-county-mapping-2025.yaml  
+
+On sucesss job creates 
+s3://$BUCKET/stg/kedro-etl-pipeline/reports/2025/state_county_mapping.csv file
 ```
-- Confirm that S3 contains the state county mapping csv file for that year. The exact S3 filepath can be found in the job's logs, along with the number of rows in the dataset.
+##### Step 2) Generate institutions (panel) input file (Run once per year)
+- Apply kedro job for institutions (panel) file:
 ```
-aws s3 ls  --human-readable s3://xxx/dev/kedro-etl-pipeline/reports/2023/state_county_mapping.csv
-2024-05-10 14:28:10   57.1 KiB state_county_mapping.csv
+kubectl apply -f kubernetes/2025/kedro-etl-pipeline-job-institutions-flat-file-2025.yaml
+
+On sucesss job creates
+s3://$BUCKET/stg/kedro-etl-pipeline/regulator/2025/institutions/01_raw/latest/email_domains.parquet
+s3://$BUCKET/stg/kedro-etl-pipeline/regulator/2025/institutions/01_raw/latest/institutions.parquet
+s3://$BUCKET/stg/kedro-etl-pipeline/regulator/2025/institutions/02_data_publication/latest_2025_panel.txt
 ```
 
 ##### Step 3) Generate reduced LAR input file (Run once per year)
-- Example Kedro run command to be used in kedro-etl-pipeline-job-reduced-lar-2023.yaml
-```
-kedro run --runner=ThreadRunner --params=max_workers=6 --tags="2023_Filing_Season" --env=dev  --to-outputs="reduced_lar_for_disclosure_reports_flat_file_2023"
-```
-> **_Note:_**   Add `--pipeline="data_publisher"` to the command to skip reading from the LAR postgres table. This only works if the raw data has already been read and saved for the year.
-- Apply kedro job for reduced LAR:
-```
-kubectl apply -f kedro-etl-pipeline-job-reduced-lar-2023.yaml
-```
+- Apply kedro job for reduced LAR
+- Run on `kedro-large` node
 - Confirm that S3 contains the reduced LAR parquet file for that year. The exact S3 filepath can be found in the job's logs, along with the number of rows in the dataset.
 ```
-aws s3 ls  --human-readable s3://xxx/dev/kedro-etl-pipeline/reports/2023/reduced_lar.parquet
-2024-05-01 18:52:19  307.0 MiB reduced_lar.parquet
-```
+kubectl apply -f kubernetes/2025/kedro-etl-pipeline-job-reduced-lar-reports-parquet-2025.yaml
 
-##### Step 4) Generate institutions (panel) input file (Run once per year)*
-- See institutions (panel) section above for more details
-- Apply kedro job for institutions (panel) file:
+On sucesss, job creates 
+s3://hmda-kedro-test-bucket/stg/kedro-etl-pipeline/reports/2024/reduced_lar.parquet
 ```
-kubectl apply -f kedro-etl-pipeline-job-panel-2023.yaml
-```
+> **_Note:_**   Add `--pipeline="data_publisher"` to the command to skip reading from the LAR postgres table. This only works if the raw data has already been read and saved for the year.
 
 #### Generate aggregate reports
-- SQL query to get MSA count from the cbsa_county_name table
+##### Step 4a) Upload the lei_list.csv file (Do once per year)
+- The csv file should contain only one LEI per line.
+- For disclosure reports, file is used to run reports on a list of LEI.
+- For aggregate reports, file is used to exclude some LEI from the reports.
+- Due to `bug` report generatation fails if file is not in S3
+- Example file:
 ```
-SELECT COUNT(*) FROM hmda_user.cbsa_county_name;
-1899
+cat lei_list.csv 
+5493003GQDUH26DNNH17
+
+s3://$BUCKET/stg/kedro-etl-pipeline/reports/disclosure/2025/lei_list.csv
+s3://$BUCKET/stg/kedro-etl-pipeline/reports/aggregate/2025/lei_list.csv
 ```
-- Example Kedro run command to be used in kedro-etl-pipeline-job-aggregate-2023.yaml
+
+
+##### Step 4b) Upload the msa_list.csv file (Do once per year)
+- The csv file should contain only one MSA per line.
+- This file is only used for aggregate reports to run reports on a list of MSA.
+- Due to `bug` report generatation fails if file is not in S3
+- Example file:
 ```
-kedro run --runner=ThreadRunner --params=max_workers=6,use_lei_list=false --tags="2023_Filing_Season" --env=dev --pipeline="aggregate_and_disclosure_reports"
+cat msa_list.csv 
+12580
+23224
+
+s3://$BUCKET/stg/kedro-etl-pipeline/reports/aggregate/2025/msa_list.csv
 ```
+
+##### Step 5) Generate aggregate reports (Do once per year) - run duration 40 min
 - Include `skip_existing_reports=False` in the params list to regenerate all reports, including ones that already exist in S3.
 - Include `use_lei_list=True` in the params list to exclude the list of LEI found in lei_list.csv from the reports.
 - Include `use_msa_list=True` in the params list to generate aggregate reports on the list of MSA in msa_list.csv.
-    - The job config kedro-etl-pipeline-job-aggregate-msalist-2023.yaml uses this param.
-
+- Run on `kedro-large` node
 - Apply kedro job for aggregate report files:
 ```
-kubectl apply -f kedro-etl-pipeline-job-aggregate-2023.yaml
+kubectl apply -f kubernetes/2025/kedro-etl-pipeline-job-aggregate-2025.yaml
 ```
 - S3 outputs MSA folder count processed
 ```
-aws s3 ls  --human-readable s3://xxx/dev/kedro-etl-pipeline/reports/2023/aggregate/aggregate_reports/ | wc -l
-    1899
-```
-- Alternative command to run all pre steps and aggregate report in a single command (not used)
-```
-kedro run --runner=ThreadRunner --params=max_workers=6,use_lei_list=false --tags="2023_Filing_Season" --env=dev --to-outputs="aggregate_reports_2023"
+aws s3 ls s3://$BUCKET/stg/kedro-etl-pipeline/reports/aggregate/2025/aggregate_reports/ --recursive | wc -l
+    2927
 ```
 
-#### Generate disclosure reports
-- SQL query to get LEI count in the LAR table
-```
-SELECT COUNT(DISTINCT(lei)) FROM hmda_user.restore_nightly_loanapplicationregister2023;
-4376
-```
-- Example Kedro run command to be used in kedro-etl-pipeline-job-disclosure-2023.yaml
-```
-kedro run --runner=ThreadRunner --params=max_workers=6,use_lei_list=false --tags="2023_Filing_Season" --env=dev --pipeline="aggregate_and_disclosure_reports"
-```
+
+#### Step 5) Generate disclosure reports (run durataion 14 hours)
 - Include `skip_existing_reports=False` in the params list to regenerate all reports, including ones that already exist in S3.
-    - The job config kedro-etl-pipeline-job-disclosure-leilist-2023.yaml uses this param. 
-- Include `use_lei_list=True` in the params list to generate disclosure reports on the list of LEI in lei_list.csv. This is set in the job config kedro-etl-pipeline-job-disclosure-leilist-2023.yaml
-
+- Include `use_lei_list=True` in the params list to generate disclosure reports on the list of LEI in lei_list.csv.
+- Run on `kedro-large` node
 - Apply kedro job for disclosure report files:
 ```
-kubectl apply -f kedro-etl-pipeline-job-disclosure-2023.yaml
+kubectl apply -f kubernetes/2025/kedro-etl-pipeline-job-disclosure-reports-2025.yaml
 ```
 - S3 outputs LEI folder count processed
 ```
-aws s3 ls  --human-readable s3://xxx/dev/kedro-etl-pipeline/reports/disclosure/2023/disclosure_reports/ | wc -l
-    4375
-```
-- Alternative command to run all pre steps and disclosure report in a single command (not used)
-```
-kedro run --runner=ThreadRunner --params=max_workers=6,use_lei_list=false --tags="2023_Filing_Season" --env=dev --to-outputs="disclosure_reports_2023"
+aws s3 ls s3://hmda-kedro-test-bucket/stg/kedro-etl-pipeline/reports/disclosure/2025/disclosure_reports/ --recursive | wc -l
+  341882
 ```
 
-##### Example disclosure report run
+- Logs
 ```
-kubectl apply -f kedro-etl-pipeline-job-disclosure-2023.yaml
-kubectl delete -f kedro-etl-pipeline-job-disclosure-2023.yaml
-
-kubectl logs -f  $(kubectl get pods | grep kedro-etl-pipeline-job-disclosure-2023 | awk '{print $1}') 
-[03/27/24 16:17:58] INFO     Creating disclosure report table 2 for nodes.py:210
-                             ZXMJHJK466PBZTM5F379/99999                         
-[03/27/24 16:18:03] INFO     Completed node:                thread_runner.py:138
-                             generate_disclosure_reports_fo                     
-                             r_2023                                             
-                    INFO     Completed 1 out of 1 tasks     thread_runner.py:139
-                    INFO     Pipeline execution completed          runner.py:105
-                             successfully.
+kubectl -n cron-jobs logs -f  $(kubectl -n cron-jobs get pods | grep kedro-etl-pipeline-job-disclosure-reports-2025 | awk '{print $1}')
+                             ZXMJHJK466PBZTM5F379/99999                                           
+[06/10/26 12:39:54] INFO     Completed node:                thread_runner.py:141
+                             generate_disclosure_reports_for_2025                                             
+                    INFO     Completed 1 out of 1 tasks     thread_runner.py:142
+                    INFO     Pipeline execution completed          runner.py:125
+                             successfully. 
 ```
-> **_Note:_** Reports job can be re-run and if folders for specific LEI exists in S3 buckets, they will ber skipped. If you find errors, re-run all the reports with the param `skip_existing_reports=False`, or re-run some reports by updating lei_list.csv and using the param `use_lei_list=True`.
+> **_Note:_** Reports job can be re-run and if folders for specific LEI exists in S3 buckets, they will be skipped. If you find errors, re-run all the reports with the param `skip_existing_reports=False`, or re-run some reports by updating lei_list.csv and using the param `use_lei_list=True`.
 ```
                     INFO     Skipping reports for                   nodes.py:138
                              549300CMO3QHQGZ2Z096 because report                
@@ -440,20 +349,6 @@ kubectl logs -f  $(kubectl get pods | grep kedro-etl-pipeline-job-disclosure-202
                     INFO     Generating diclosure reports for        nodes.py:60
                              remaining 1 lei 
 ```
-
-#### Run reports using snapshot postgres tables
-- Use job config kedro-etl-pipeline-job-reduced-lar-2023-snapshot.yaml.
-    - Unlike the other reduced LAR job configs, this job config adds the configmap `kedro-dev-postgres-configmap.yaml` to the `volumeMounts` and `volume` sections and copies the configmap file in the `command` section.
-- Make sure that that the congfigmap file `kedro-dev-postgres-configmap.yaml` uses the correct snapshot tables for `pg_lar_{{year}}`, `pg_lar_counts_by_lei_{{ year }}`, and `pg_institutions_{{ year }}` datasets. The rest of the content in the configmap should be the same as in the file [dev_postgres.yaml](https://github.cfpb.gov/HMDA-Operations/kedro-etl-pipeline/blob/main/hmda-etl-pipeline/conf/dev/catalogs/dev_postgres.yaml)
-- Apply kedro job for the reduced lar snapshot dataset:
-```
-kubectl apply -f kedro-etl-pipeline-job-reduced-lar-2023-snapshot.yaml
-```
-- Apply kedro job for the institutions snapshot dataset:
-```
-kubectl apply -f kedro-etl-pipeline-job-panel-2023-snapshot.yaml
-```
-- Run the reports, making sure that `--pipeline="aggregate_and_disclosure_reports"` is included in the kedro run command to avoid re-generating the reduced LAR dataset again on non-snapshot data.
 
 #### Additional commands to check generate files
 - All files for year 2023

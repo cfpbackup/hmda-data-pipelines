@@ -1,7 +1,7 @@
 # environment files
 .env
 
-# Personal vscode settings 
+# Personal vscode settings
 .vscode/
 
 # Python artifacts
@@ -13,3 +13,14 @@ __pycache__
 
 # Emacs
 *~
+# secret-store files
+kubernetes/kedro-env-creds-spc.yaml
+kubernetes/kedro-base-creds-spc.yaml
+kuberneteskedro-dev-creds-spc.yaml
+kubernetes/kedro-s3-paths-spc.yaml
+
+#local env
+kedro1
+
+#temp ignore current year k8 jobs
+# kubernetes/2025/

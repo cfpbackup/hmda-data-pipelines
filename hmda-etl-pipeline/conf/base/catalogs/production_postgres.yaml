@@ -1,12 +1,12 @@
 # These are datasets that come from our production postgres database.
 
 # LAR count by LEI is included within this file, but it may make more sense for this
-# dataset to exist within the initial_could_validation.yaml file. 
+# dataset to exist within the initial_could_validation.yaml file.
 
 # This file is the same for all years before 2024
 pg_cbsa_county_name_{year}:
   type: pandas.SQLQueryDataset
-  sql: "SELECT * FROM hmda_user.cbsa_county_name;"
+  sql: "SELECT * FROM hmda_user.cbsa_county_name_v2;"
   credentials: production_pg_readonly
   metadata:
     kedro-viz:
@@ -14,7 +14,7 @@ pg_cbsa_county_name_{year}:
 
 pg_lar_{year}:
   type: pandas.SQLQueryDataset
-  sql: "SELECT * FROM hmda_user.loanapplicationregister{year};"
+  sql: "SELECT * FROM hmda_user.loanapplicationregister2025_snapshot_06022026;"
   load_args:
     chunksize: 250000
   credentials: production_pg_readonly
@@ -26,7 +26,7 @@ pg_lar_{year}:
 # the year to the end of the Kedro dataset name for consistency
 pg_institutions_email_domains_{year}:
   type: pandas.SQLQueryDataset
-  sql: "SELECT * FROM institutions_emails_2018;"
+  sql: "SELECT * FROM hmda_user.institutions_emails_snapshot_06022026;"
   credentials: production_pg_readonly
   metadata:
     kedro-viz:
@@ -38,7 +38,7 @@ pg_lar_counts_by_lei_{year}:
   type: CachedDataset
   dataset:
     type: pandas.SQLQueryDataset
-    sql: "SELECT lei, COUNT(*) FROM hmda_user.loanapplicationregister{year} GROUP BY lei;"
+    sql: "SELECT lei, COUNT(*) FROM hmda_user.loanapplicationregister2025_snapshot_06022026 GROUP BY lei;"
     credentials: production_pg_readonly
   metadata:
     kedro-viz:
@@ -46,7 +46,7 @@ pg_lar_counts_by_lei_{year}:
 
 pg_institutions_{year}:
   type: pandas.SQLQueryDataset
-  sql: "SELECT * FROM hmda_user.institutions{year};"
+  sql: "SELECT * FROM hmda_user.institutions2025_snapshot_06022026;"
   credentials: production_pg_readonly
   metadata:
     kedro-viz:
@@ -54,7 +54,7 @@ pg_institutions_{year}:
 
 pg_ts_{year}:
   type: pandas.SQLQueryDataset
-  sql: "SELECT * FROM hmda_user.transmittalsheet{year};"
+  sql: "SELECT * FROM hmda_user.transmittalsheet2025_snapshot_06022026;"
   credentials: production_pg_readonly
   metadata:
     kedro-viz:

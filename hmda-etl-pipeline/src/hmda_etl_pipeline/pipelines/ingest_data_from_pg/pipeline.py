@@ -1,12 +1,12 @@
 """
 Performs basic record count validation on LAR, TS, and Panel prior to
-continuing with parquet file creation. This pipeline will riase a 
-runtime error if the count validation step fails, thereby halting the 
-entire pipeline. 
+continuing with parquet file creation. This pipeline will riase a
+runtime error if the count validation step fails, thereby halting the
+entire pipeline.
 
-LAR is written as a partitioned dataset while TS and Institutions are 
+LAR is written as a partitioned dataset while TS and Institutions are
 written as single files. The paths where these files are persisted are
-specified within the data_paths.yaml files in conf/dev and conf/local. 
+specified within the data_paths.yaml files in conf/dev and conf/local.
 """
 
 from kedro.pipeline import Pipeline, node, pipeline
@@ -23,7 +23,7 @@ from .nodes import (
 # this will be supplied to create_pipeline below
 nodes = []
 
-for year in (2019, 2020, 2021, 2022, 2023, 2024):
+for year in (2019, 2020, 2021, 2022, 2023, 2024, 2025):
     nodes += [
         # perform count validation
         node(
@@ -92,7 +92,7 @@ for year in (2019, 2020, 2021, 2022, 2023, 2024):
             name=f"generate_state_county_mapping_for_reports_for_{year}",
         ),
     ]
-    
+
     for quarter in ("q1", "q2", "q3"):
         nodes += [
             # perform count validation for quarter

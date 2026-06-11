@@ -3,7 +3,8 @@ FROM $BASE_IMAGE AS runtime-environment
 
 # install project requirements
 COPY /hmda-etl-pipeline/src/requirements.txt /tmp/requirements.txt
-COPY /hmda-etl-pipeline/src/setup-job.sh /tmp/setup-job.sh
+COPY /hmda-etl-pipeline/conf/dev/catalogs/dev_postgres.yaml /tmp/dev_postgres.yaml
+#COPY /hmda-etl-pipeline/src/setup-job.sh /tmp/setup-job.sh
 RUN pip install --upgrade pip 
 RUN pip install --no-cache -r /tmp/requirements.txt && rm -f /tmp/requirements.txt
 RUN apt-get update
